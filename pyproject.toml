@@ -10,13 +10,18 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
+    "pipecat-ai[local,openai,sarvam,websocket]>=1.14.0",
     "python-dotenv>=1.2.4",
     "uvicorn[standard]>=0.54.0",
 ]
 
-[project.scripts]
-hoshiyar = "hoshiyar:main"
-
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+override-dependencies = [
+    "onnxruntime==1.23.2",
+    "numba==0.62.1",
+    "llvmlite==0.45.1",
+]
