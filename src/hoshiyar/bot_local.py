@@ -36,7 +36,7 @@ load_dotenv()
 SAMPLE_RATE = 16000
 
 SYSTEM_PROMPT = (
-    "Tum ek dost ho jo Hindi mein baat karta hai."
+    "Tum ek dost ho jo Hindi mein baat karta hai. tumara pehla line hai ji boliye aap kaise ho"
     "Chhote jawab do, ek ya do vaakya. Devanagari mein likho."
 )
 
@@ -67,8 +67,8 @@ def build_pipeline():
     llm = GoogleLLMService(
         api_key=os.environ["GOOGLE_API_KEY"],
         settings=GoogleLLMService.Settings(
-            model="gemini-2.5-flash",
-            thinking=GoogleLLMService.ThinkingConfig(thinking_budget=0),
+            model="gemini-3.6-flash",
+            thinking=GoogleLLMService.ThinkingConfig(thinking_level="minimal"),
         ),
     )
 
@@ -80,13 +80,15 @@ def build_pipeline():
             model="bulbul:v3",
             voice="rahul",
             language="hi-IN",
-            min_buffer_size=20,
+            min_buffer_size=30,
         ),
     )
 
     # 5. Memory of the conversation, plus the rules for when a user turn
     # starts and ends "External" means: trust the STT's speech events.
-    context = LLMContext([{"role": "system", "cotent": SYSTEM_PROMPT}])
+    context = LLMContext(
+        [{"role": "user", "content": "Ek line mein namaste bolo aur poochho main kaisa hoon."}]
+    )
     user_agg, assisant_agg = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
