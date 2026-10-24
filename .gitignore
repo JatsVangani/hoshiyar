@@ -2,3 +2,4 @@
 .venv/
 data/calls.json
 __pycache__/
+scratch/
