@@ -25,7 +25,7 @@ from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.services.sarvam.stt import SarvamRealtimeSTTService
 from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.local.audio import LocalAudioTransport, LocalAudioTransportParams
-from pipecat.turns.user_start import ExternalUserTurnStartStrategy
+from pipecat.turns.user_start import MinWordsUserTurnStartStrategy
 from pipecat.turns.user_stop import ExternalUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
@@ -93,7 +93,7 @@ def build_pipeline():
         context,
         user_params=LLMUserAggregatorParams(
              user_turn_strategies=UserTurnStrategies(
-                start=[ExternalUserTurnStartStrategy()],
+                start=[MinWordsUserTurnStartStrategy(min_words=3)],
                 stop=[ExternalUserTurnStopStrategy(timeout=0.2, wait_for_transcript=True)],
             ),
             user_idle_timeout=12.0,
