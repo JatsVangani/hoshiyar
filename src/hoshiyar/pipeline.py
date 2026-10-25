@@ -17,11 +17,25 @@ from pipecat.transports.base_transport import BaseTransport
 from pipecat.turns.user_start import MinWordsUserTurnStartStrategy
 from pipecat.turns.user_stop import ExternalUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
+from pipecat.frames.frames import TTSSpeakFrame
+
+OPENER = "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?"
 
 SYSTEM_PROMPT = (
-    "Tum ek dost ho jo Hindi mein baat karta hai. Tumhari pehli line hai: ji boliye aap kaise ho. "
-    "Chhote jawab do, ek ya do vaakya. Devanagari mein likho."
+    "Tum Hoshiyar ho, ek dost jo Hindi mein baat karta hai. "
+    f"Call uthte hi tum keh chuke ho: '{OPENER}' Ab uske jawab se baat aage badhao. "
+    "Chhote jawab do, ek ya do vaakya. Devanagari mein likho, koi markdown ya asterisk nahi."
 )
+
+def opener_frame() -> TTSSpeakFrame:
+    """The first thing the driver hears, spoken straight from TTS so there is no LLM wait.
+
+    append_to_context=False: the system prompt already tells the model this was said.
+    interruptible=False: the driver's reflexive 'hello' on pickup must not cut it off.
+    """
+    frame = TTSSpeakFrame(OPENER, append_to_context=False)
+    frame.interruptible = False
+    return frame
 
 def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
     # Speech to text. Sarvam accepts 8000 or 16000 Hz, so we tell it which one.
@@ -59,9 +73,11 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
     )
 
     # Conversation memory plus the turn rules
-    context = LLMContext(
-        [{"role": "user", "content": "Ek line mein namaste bolo aur poochho main kaisa hoon."}]
-    )
+    # context = LLMContext(
+    #     [{"role": "user", "content": "Ek line mein namaste bolo aur poochho main kaisa hoon."}]
+    # )
+    context = LLMContext()
+    
     user_agg, assistant_agg = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(

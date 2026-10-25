@@ -5,7 +5,7 @@ Vobiz speaks Plivo's audio-streaming protocol, so Pipecat's Plivo serializer doe
 
 from fastapi import WebSocket
 from loguru import logger
-from pipecat.frames.frames import LLMRunFrame
+from hoshiyar.pipeline import opener_frame
 from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.runner.utils import parse_telephony_websocket
@@ -52,7 +52,7 @@ async def run_phone_bot(websocket: WebSocket):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        await worker.queue_frames([LLMRunFrame()])  # bot speaks first
+        await worker.queue_frames([opener_frame()])  # bot speaks first
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):

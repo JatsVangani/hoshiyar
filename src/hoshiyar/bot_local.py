@@ -11,7 +11,7 @@ Stop: Ctrl+C
 import asyncio
 
 from dotenv import load_dotenv
-from pipecat.frames.frames import LLMRunFrame
+from hoshiyar.pipeline import opener_frame
 from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.transports.local.audio import LocalAudioTransport, LocalAudioTransportParams
@@ -38,7 +38,7 @@ async def main():
         params=PipelineParams(enable_metrics=True, enable_usage_metrics=True),
         observers=[MetricsLogObserver()],
     )
-    await worker.queue_frames([LLMRunFrame()])
+    await worker.queue_frames([opener_frame()])
 
     runner = WorkerRunner()
     await runner.add_workers(worker)
