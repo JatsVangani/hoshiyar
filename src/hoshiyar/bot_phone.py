@@ -1,26 +1,41 @@
-"""Phone version: one Twilio call = one pipeline. server.py calls this per WebSocket"""
+"""Phone version: one Vobiz call = one pipeline. server.py calls this per WebSocket.
 
+Vobiz speaks Plivo's audio-streaming protocol, so Pipecat's Plivo serializer does the work.
+"""
+
+from fastapi import WebSocket
 from loguru import logger
 from pipecat.frames.frames import LLMRunFrame
 from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
-from pipecat.runner.types import WebSocketRunnerArguments
-from pipecat.runner.utils import create_transport
-from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
+from pipecat.runner.utils import parse_telephony_websocket
+from pipecat.serializers.plivo import PlivoFrameSerializer
+from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 from pipecat.workers.runner import WorkerRunner
 
 from hoshiyar.pipeline import build_pipeline
 
-PHONE_SAMPLE_RATE = 8000 # what the telephone network carries
+PHONE_SAMPLE_RATE = 8000  # mu-law over the telephone network
 
-async def run_phone_bot(runner_args: WebSocketRunnerArguments):
-    # Reads Twilio's handshake off the socket, picks the Twilio serializer
-    # (mu-law 8 kHz <-> PCM) and sets add_wav_header=False for us
-    transport = await create_transport(
-        runner_args,
-        {"twilio": lambda: FastAPIWebsocketParams(audio_in_enabled=True, audio_out_enabled=True)},
+
+async def run_phone_bot(websocket: WebSocket):
+    # Reads Vobiz's "start" message and pulls out the stream and call ids.
+    transport_type, call_data = await parse_telephony_websocket(websocket)
+    logger.info(f"Stream started: detected={transport_type} call={call_data['call_id']}")
+
+    transport = FastAPIWebsocketTransport(
+        websocket=websocket,
+        params=FastAPIWebsocketParams(
+            audio_in_enabled=True,
+            audio_out_enabled=True,
+            add_wav_header=False,
+            serializer=PlivoFrameSerializer(
+                stream_id=call_data["stream_id"],
+                call_id=call_data["call_id"],
+                params=PlivoFrameSerializer.InputParams(auto_hang_up=False),
+            ),
+        ),
     )
-    logger.info(f"Call connected to {runner_args.call_data.to_number}")
 
     worker = PipelineWorker(
         build_pipeline(transport, PHONE_SAMPLE_RATE),
@@ -32,15 +47,16 @@ async def run_phone_bot(runner_args: WebSocketRunnerArguments):
         ),
         observers=[MetricsLogObserver()],
     )
-    runner = WorkerRunner(handle_sigint=False) # uvicorn owns Ctrl+C
+    runner = WorkerRunner(handle_sigint=False)  # uvicorn owns Ctrl+C, not us
     await runner.add_workers(worker)
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        await worker.queue_frames([LLMRunFrame()]) # bot speaks first
+        await worker.queue_frames([LLMRunFrame()])  # bot speaks first
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
+        logger.info("Call ended")
         await runner.cancel()
 
     await runner.run()
