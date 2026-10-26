@@ -2,7 +2,7 @@
 
 import os
 
-import httpx
+# import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
@@ -10,37 +10,19 @@ from fastapi.responses import Response
 from loguru import logger
 
 from hoshiyar.bot_phone import run_phone_bot
+from hoshiyar import vobiz
 
 load_dotenv()
 
 app = FastAPI()
 
-VOBIZ_API = "https://api.vobiz.ai/api/v1"
+# VOBIZ_API = "https://api.vobiz.ai/api/v1"
 
 
 @app.post("/dialout")
 async def dialout():
-    """Ask Vobiz to ring MY_PHONE. When it picks up, Vobiz POSTs to /answer for instructions."""
-    base = os.environ["LOCAL_SERVER_URL"]
-    auth_id = os.environ["VOBIZ_AUTH_ID"]
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            f"{VOBIZ_API}/Account/{auth_id}/Call/",
-            headers={
-                "X-Auth-ID": auth_id,
-                "X-Auth-Token": os.environ["VOBIZ_AUTH_TOKEN"],
-            },
-            json={
-                "from": os.environ["VOBIZ_PHONE_NUMBER"],
-                "to": os.environ["MY_PHONE"],
-                "answer_url": f"{base}/answer",
-                "answer_method": "POST",
-                "hangup_url": f"{base}/hangup",
-            },
-        )
-    logger.info(f"Vobiz dial response {r.status_code}: {r.text}")
-    r.raise_for_status()
-    return r.json()
+    """Ring MY_PHONE. When it picks up, Vobiz POSTs to /answer for instructions."""
+    return await vobiz.dial(os.environ["MY_PHONE"], os.environ["LOCAL_SERVER_URL"])
 
 
 @app.post("/answer")

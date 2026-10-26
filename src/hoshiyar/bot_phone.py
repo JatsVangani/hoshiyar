@@ -14,6 +14,7 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 from pipecat.workers.runner import WorkerRunner
 
 from hoshiyar.pipeline import build_pipeline
+from hoshiyar import vobiz
 
 PHONE_SAMPLE_RATE = 8000  # mu-law over the telephone network
 
@@ -38,6 +39,7 @@ async def run_phone_bot(websocket: WebSocket):
     )
 
     pipeline, state = build_pipeline(transport, PHONE_SAMPLE_RATE)
+    state.call_id = call_data["call_id"]
 
     worker = PipelineWorker(
         pipeline,
@@ -58,7 +60,9 @@ async def run_phone_bot(websocket: WebSocket):
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
-        logger.info(f"Call summary: scores={state.scores} final mode={state.mode}")
         await runner.cancel()
 
     await runner.run()
+    logger.info(f"Call summary: scores={state.scores} final mode={state.mode}")
+    if state.hangup_requested:
+        await vobiz.hangup(state.call_id)
