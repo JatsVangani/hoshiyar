@@ -25,6 +25,10 @@ from pipecat.services.google.llm import GoogleLLMService
 
 from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools
 
+from pipecat.turns.user_mute.mute_until_first_bot_complete_user_mute_strategy import (
+    MuteUntilFirstBotCompleteUserMuteStrategy,
+)
+
 # provider -> (service class, key env var, model env var, default model, extra settings)
 LLM_PROVIDERS = {
     "sarvam": (SarvamLLMService, "SARVAM_API_KEY", "SARVAM_MODEL", "gemma4", {}),
@@ -107,6 +111,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline
                 start=[MinWordsUserTurnStartStrategy(min_words=3)],
                 stop=[ExternalUserTurnStopStrategy(timeout=0.2, wait_for_transcript=True)],
             ),
+            user_mute_strategies=[MuteUntilFirstBotCompleteUserMuteStrategy()],
             user_idle_timeout=12.0,
             user_turn_stop_timeout=3.0,
         ),
