@@ -23,7 +23,7 @@ from pipecat.services.groq.llm import GroqLLMService
 from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.google.llm import GoogleLLMService
 
-from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools
+from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for 
 
 from pipecat.turns.user_mute.mute_until_first_bot_complete_user_mute_strategy import (
     MuteUntilFirstBotCompleteUserMuteStrategy,
@@ -112,10 +112,20 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline
                 stop=[ExternalUserTurnStopStrategy(timeout=0.2, wait_for_transcript=True)],
             ),
             user_mute_strategies=[MuteUntilFirstBotCompleteUserMuteStrategy()],
-            user_idle_timeout=12.0,
+            user_idle_timeout=FIRST_NUDGE_AFTER,
             user_turn_stop_timeout=3.0,
         ),
     )
+
+    @user_agg.event_handler("on_user_turn_idle")
+    async def on_user_turn_idle(aggregator):
+        line = nudge_for(state)
+        logger.info(f"Driver quiet, nudge #{state.unanswered} in {state.mode}: {line}")
+        await aggregator.push_frame(TTSSpeakFrame(line)) # goes down through LLM (pass-through) to TTS
+
+    @user_agg.event_handler("on_user_turn_started")
+    async def on_user_turn_started(aggregator, strategy):
+        state.unanswered = 0
 
     pipeline =  Pipeline(
         [
