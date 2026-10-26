@@ -33,8 +33,11 @@ async def main():
             audio_out_sample_rate=SAMPLE_RATE,
         )
     )
+
+    pipeline, state = build_pipeline(transport, SAMPLE_RATE)
+    
     worker = PipelineWorker(
-        build_pipeline(transport, SAMPLE_RATE),
+        pipeline,
         params=PipelineParams(enable_metrics=True, enable_usage_metrics=True),
         observers=[MetricsLogObserver()],
     )

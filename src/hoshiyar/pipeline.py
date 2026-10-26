@@ -19,13 +19,15 @@ from pipecat.turns.user_stop import ExternalUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.frames.frames import TTSSpeakFrame
 
-OPENER = "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?"
+from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools
 
-SYSTEM_PROMPT = (
-    "Tum Hoshiyar ho, ek dost jo Hindi mein baat karta hai. "
-    f"Call uthte hi tum keh chuke ho: '{OPENER}' Ab uske jawab se baat aage badhao. "
-    "Chhote jawab do, ek ya do vaakya. Devanagari mein likho, koi markdown ya asterisk nahi."
-)
+# OPENER = "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?"
+
+# SYSTEM_PROMPT = (
+#     "Tum Hoshiyar ho, ek dost jo Hindi mein baat karta hai. "
+#     f"Call uthte hi tum keh chuke ho: '{OPENER}' Ab uske jawab se baat aage badhao. "
+#     "Chhote jawab do, ek ya do vaakya. Devanagari mein likho, koi markdown ya asterisk nahi."
+# )
 
 def opener_frame() -> TTSSpeakFrame:
     """The first thing the driver hears, spoken straight from TTS so there is no LLM wait.
@@ -37,7 +39,7 @@ def opener_frame() -> TTSSpeakFrame:
     frame.interruptible = False
     return frame
 
-def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
+def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline, CallState]:
     # Speech to text. Sarvam accepts 8000 or 16000 Hz, so we tell it which one.
     stt = SarvamRealtimeSTTService(
         api_key=os.environ["SARVAM_API_KEY"],
@@ -55,7 +57,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
         api_key=os.environ["GOOGLE_API_KEY"],
         settings=GoogleLLMService.Settings(
             model="gemini-3.6-flash",
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=PERSONA,
             thinking=GoogleLLMService.ThinkingConfig(thinking_level="minimal"),
         ),
     )
@@ -76,7 +78,8 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
     # context = LLMContext(
     #     [{"role": "user", "content": "Ek line mein namaste bolo aur poochho main kaisa hoon."}]
     # )
-    context = LLMContext()
+    state = CallState()
+    context = LLMContext(tools=make_tools(state))
     
     user_agg, assistant_agg = LLMContextAggregatorPair(
         context,
@@ -90,7 +93,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
         ),
     )
 
-    return Pipeline(
+    pipeline =  Pipeline(
         [
             transport.input(),
             stt,
@@ -101,3 +104,5 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> Pipeline:
             assistant_agg,
         ]
     )
+
+    return pipeline, state

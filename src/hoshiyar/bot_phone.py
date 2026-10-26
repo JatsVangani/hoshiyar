@@ -37,8 +37,10 @@ async def run_phone_bot(websocket: WebSocket):
         ),
     )
 
+    pipeline, state = build_pipeline(transport, PHONE_SAMPLE_RATE)
+
     worker = PipelineWorker(
-        build_pipeline(transport, PHONE_SAMPLE_RATE),
+        pipeline,
         params=PipelineParams(
             audio_in_sample_rate=PHONE_SAMPLE_RATE,
             audio_out_sample_rate=PHONE_SAMPLE_RATE,
@@ -56,7 +58,7 @@ async def run_phone_bot(websocket: WebSocket):
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
-        logger.info("Call ended")
+        logger.info(f"Call summary: scores={state.scores} final mode={state.mode}")
         await runner.cancel()
 
     await runner.run()
