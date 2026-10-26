@@ -15,6 +15,7 @@ from pipecat.workers.runner import WorkerRunner
 
 from hoshiyar.pipeline import build_pipeline
 from hoshiyar import vobiz
+from hoshiyar.signals import ReplyDelayObserver
 
 PHONE_SAMPLE_RATE = 8000  # mu-law over the telephone network
 
@@ -49,7 +50,7 @@ async def run_phone_bot(websocket: WebSocket):
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
-        observers=[MetricsLogObserver()],
+        observers=[MetricsLogObserver(), ReplyDelayObserver(state)],
     )
     runner = WorkerRunner(handle_sigint=False)  # uvicorn owns Ctrl+C, not us
     await runner.add_workers(worker)
@@ -63,6 +64,9 @@ async def run_phone_bot(websocket: WebSocket):
         await runner.cancel()
 
     await runner.run()
-    logger.info(f"Call summary: scores={state.scores} final mode={state.mode}")
+    logger.info(
+        f"Call summary: scores={state.scores} final mode={state.mode} "
+        f"reply delays={state.reply_delays} unresponsive={state.unresponsive}"
+    )
     if state.hangup_requested:
         await vobiz.hangup(state.call_id)
