@@ -10,7 +10,6 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.services.google.llm import GoogleLLMService
 from pipecat.services.sarvam.stt import SarvamRealtimeSTTService
 from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.base_transport import BaseTransport
@@ -19,7 +18,22 @@ from pipecat.turns.user_stop import ExternalUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.frames.frames import TTSSpeakFrame
 
+from loguru import logger
+from pipecat.services.groq.llm import GroqLLMService
+from pipecat.services.sarvam.llm import SarvamLLMService
+from pipecat.services.google.llm import GoogleLLMService
+
 from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools
+
+# provider -> (service class, key env var, model env var, default model, extra settings)
+LLM_PROVIDERS = {
+    "sarvam": (SarvamLLMService, "SARVAM_API_KEY", "SARVAM_MODEL", "gemma4", {}),
+    "groq": (GroqLLMService, "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b", {}),
+    "gemini": (
+        GoogleLLMService, "GOOGLE_API_KEY", "GEMINI_MODEL", "gemini-3.6-flash",
+        {"thinking": GoogleLLMService.ThinkingConfig(thinking_level="minimal")},
+    ),
+}
 
 # OPENER = "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?"
 
@@ -39,6 +53,18 @@ def opener_frame() -> TTSSpeakFrame:
     frame.interruptible = False
     return frame
 
+def make_llm():
+    provider = os.environ.get("LLM_PROVIDER", "sarvam").lower()
+    if provider not in LLM_PROVIDERS:
+        raise ValueError(f"LLM_PROVIDER must be one of {sorted(LLM_PROVIDERS)}, not {provider!r}")
+    service, key_var, model_var, default_model, extra = LLM_PROVIDERS[provider]
+    model = os.environ.get(model_var, default_model)
+    logger.info(f"LLM: {provider} / {model}")
+    return service(
+        api_key=os.environ[key_var],
+        settings=service.Settings(model=model, system_instruction=PERSONA, **extra),
+    )
+
 def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline, CallState]:
     # Speech to text. Sarvam accepts 8000 or 16000 Hz, so we tell it which one.
     stt = SarvamRealtimeSTTService(
@@ -53,14 +79,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline
     )
 
     # The brain. system_instructions lives inside Settings in Pipecat 1.14
-    llm = GoogleLLMService(
-        api_key=os.environ["GOOGLE_API_KEY"],
-        settings=GoogleLLMService.Settings(
-            model="gemini-3.6-flash",
-            system_instruction=PERSONA,
-            thinking=GoogleLLMService.ThinkingConfig(thinking_level="minimal"),
-        ),
-    )
+    llm = make_llm()
 
     # Text to speech, generated at the transport's rate so nothing is resampled.
     tts = SarvamTTSService(

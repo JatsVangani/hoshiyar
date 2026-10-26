@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
-    "pipecat-ai[google,local,openai,sarvam,websocket]>=1.14.0",
+    "pipecat-ai[google,groq,local,openai,sarvam,websocket]>=1.14.0",
     "python-dotenv>=1.2.4",
     "uvicorn[standard]>=0.54.0",
 ]
