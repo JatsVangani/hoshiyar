@@ -8,13 +8,13 @@ from urllib.parse import parse_qs
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import Response
+from fastapi.responses import Response, HTMLResponse
 from loguru import logger
 
 load_dotenv()
 
 from hoshiyar.bot_phone import run_phone_bot
-from hoshiyar import vobiz, alerts, scheduler
+from hoshiyar import vobiz, alerts, scheduler, fleet
 
 
 @asynccontextmanager
@@ -48,6 +48,11 @@ async def answer():
         "</Response>"
     )
     return Response(content=xml, media_type="application/xml")
+
+@app.get("/fleet", response_class=HTMLResponse)
+async def fleet_page():
+    """The fleet manager's screen. Open /fleet on the ngrok URL from any phone."""
+    return fleet.render()
 
 @app.post("/alert/{alert_id}")
 async def alert(alert_id: str):

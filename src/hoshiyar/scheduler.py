@@ -22,15 +22,21 @@ TICK = 20.0  # seconds between rota checks
 GRACE = 15 * 60  # a slot missed by less than this (server was down) is still called
 CALL_TIMEOUT = 30 * 60  # longest we wait for a driver call's hangup
 
+_last_roster: list[dict] = []
 CALLS: dict[str, dict] = {}  # request_uuid -> {"kind": "checkin"|"wakeup", "driver": {...}}; bot_phone pops it
 _tasks: set[asyncio.Task] = set()  # keep references or asyncio may garbage-collect a sleeping task
 
 
 def load_roster() -> list[dict]:
     """[{"name", "phone", "route", "checkins": ["23:00", "01:30"]}]. Empty when the file is missing."""
+    global _last_roster
     if not ROSTER_FILE.exists():
         return []
-    return json.loads(ROSTER_FILE.read_text(encoding="utf-8"))
+    try:
+        _last_roster = json.loads(ROSTER_FILE.read_text(encoding="utf-8"))
+    except ValueError as e:  # caught mid-edit: keep the last good roster rather than kill the rota
+        logger.warning(f"Roster unreadable, keeping the last good one: {e}")
+    return _last_roster
 
 
 def driver_for(phone: str) -> dict:
