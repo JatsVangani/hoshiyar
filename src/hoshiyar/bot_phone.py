@@ -14,7 +14,7 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 from pipecat.workers.runner import WorkerRunner
 
 from hoshiyar.pipeline import build_pipeline
-from hoshiyar import vobiz, scheduler
+from hoshiyar import vobiz, scheduler, records
 from hoshiyar.signals import ReplyDelayObserver
 from hoshiyar.brain import OPENERS
 
@@ -74,6 +74,7 @@ async def run_phone_bot(websocket: WebSocket):
         f"Call summary: scores={state.scores} final mode={state.mode} "
         f"reply delays={state.reply_delays} unresponsive={state.unresponsive} alerts={len(state.alerts)}"
     )
+    records.save(state, kind) # the fleet page reads this;
     if state.break_taken:
         scheduler.schedule_wakeup(state.driver)
     if state.hangup_requested:
