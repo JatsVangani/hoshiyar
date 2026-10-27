@@ -11,10 +11,10 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import Response
 from loguru import logger
 
+load_dotenv()
+
 from hoshiyar.bot_phone import run_phone_bot
 from hoshiyar import vobiz, alerts, scheduler
-
-load_dotenv()
 
 
 @asynccontextmanager
