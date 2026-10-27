@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from loguru import logger
 
 from hoshiyar.bot_phone import run_phone_bot
-from hoshiyar import vobiz
+from hoshiyar import vobiz, alerts
 
 load_dotenv()
 
@@ -37,6 +37,10 @@ async def answer():
     )
     return Response(content=xml, media_type="application/xml")
 
+@app.post("/alert/{alert_id}")
+async def alert(alert_id: str):
+    """The fleet manager picked up: read the alert out loud. Vobiz hangs up when the XML runs out"""
+    return Response(content=alerts.alert_xml(alert_id), media_type="application/xml")
 
 @app.post("/hangup")
 async def hangup(request: Request):

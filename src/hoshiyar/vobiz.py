@@ -11,7 +11,7 @@ def _auth() -> tuple[str, dict]:
     auth_id = os.environ["VOBIZ_AUTH_ID"]
     return auth_id, {"X-Auth-ID": auth_id, "X-Auth-Token": os.environ["VOBIZ_AUTH_TOKEN"]}
 
-async def dial(to: str, base_url: str) -> dict:
+async def dial(to: str, base_url: str, answer_path: str = "/answer") -> dict:
     """Ring 'to' from our Vobiz number. Vobiz POSTs to {base_url}/answer when they pick up"""
     auth_id, headers = _auth()
     async with httpx.AsyncClient() as client:
@@ -21,7 +21,7 @@ async def dial(to: str, base_url: str) -> dict:
             json={
                 "from": os.environ["VOBIZ_PHONE_NUMBER"],
                 "to": to,
-                "answer_url": f"{base_url}/answer",
+                "answer_url": f"{base_url}{answer_path}",
                 "answer_method": "POST",
                 "hangup_url": f"{base_url}/hangup",
             },
