@@ -82,6 +82,8 @@ NUDGES = {
     "HEAVY": "भाई! सुन रहे हो? बोलो, जवाब दो!",
 }
 ALARM = "गाड़ी किनारे लगाओ, अभी! भाई, बोलो!"  # HEAVY driver ignored a nudge
+DRIFT_LINE = "भाई, जवाब देने में अब देर लग रही है। सच बताओ, नींद तो नहीं आ रही?"  # answers are slowing: ask again
+TIGHTER = {"QUIET": "MILD", "MILD": "HEAVY", "HEAVY": "HEAVY"}  # one level more watchful
 
 # What the fleet manager hears, one call per kind per driver call. English: Vobiz Speak has no Hindi voice.
 ALERTS = {
@@ -113,6 +115,9 @@ class CallState:
     driver: str = "driver"
     alerts: list[tuple[float, str]] = field(default_factory=list) # (seconds into call, text) for the fleet page
     break_taken: bool = False # driver agreed to stop; bot_phone schedules the wake-up call
+    drift: str = "steady"  # steady | drifting | drifted, from signals.drift over reply_delays
+    drift_acted: str = "steady"  # the drift level we have already tightened the timer for
+    drift_asked: str = "steady"  # the drift level we have already re-asked the check-in for
 
 def alert(state: CallState, kind: str, **extra) -> None:
     """Queue one fleet call of this kind per driver call. Never awaited inline: the driver must not wait for it"""
@@ -129,12 +134,21 @@ def nudge_for(state: CallState) -> str:
     state.unanswered += 1
     if state.driver_turns == 0:
         return "हैलो, सुनाई दे रहा है? " + CHECK_IN
+    if state.drift != "steady" and state.drift_asked != state.drift:  # slowing answers: re-ask once per level
+        state.drift_asked = state.drift
+        return DRIFT_LINE
     if state.mode == "HEAVY" and state.unanswered >= 2:
         state.unresponsive = True
         logger.warning(f"Driver unresponsive: {state.unanswered} HEAVY nudges unanswered")
         alert(state, "UNRESPONSIVE")
         return ALARM
     return NUDGES[state.mode]
+
+def recheck_after(state: CallState) -> float:
+    """Silence interval for the current mode, one level tighter while the driver's answers are slowing."""
+    mode = state.mode if state.drift == "steady" else TIGHTER[state.mode]
+    return RECHECK_AFTER[mode]
+
 
 def make_tools(state: CallState):
     """Build the tool list bound to this call's state."""
@@ -154,7 +168,7 @@ def make_tools(state: CallState):
             alert(state, "HEAVY", score=score)
         # The user aggregator sits upstream of the LLM; this retunes its silence timer for the new mode.
         await params.llm.push_frame(
-            UserIdleTimeoutUpdateFrame(timeout=RECHECK_AFTER[state.mode]), FrameDirection.UPSTREAM
+            UserIdleTimeoutUpdateFrame(timeout=recheck_after(state)), FrameDirection.UPSTREAM
         )
         await params.result_callback({"recorded": score, "mode": state.mode, "instructions": MODES[state.mode]})
 

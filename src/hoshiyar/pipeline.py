@@ -16,14 +16,15 @@ from pipecat.transports.base_transport import BaseTransport
 from pipecat.turns.user_start import MinWordsUserTurnStartStrategy
 from pipecat.turns.user_stop import ExternalUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
-from pipecat.frames.frames import TTSSpeakFrame
+from pipecat.frames.frames import TTSSpeakFrame, UserIdleTimeoutUpdateFrame
+from pipecat.processors.frame_processor import FrameDirection
 
 from loguru import logger
 from pipecat.services.groq.llm import GroqLLMService
 from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.google.llm import GoogleLLMService
 
-from hoshiyar.brain import OPENER, persona_for, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for 
+from hoshiyar.brain import OPENER, persona_for, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for, recheck_after
 
 from pipecat.turns.user_mute.mute_until_first_bot_complete_user_mute_strategy import (
     MuteUntilFirstBotCompleteUserMuteStrategy,
@@ -127,6 +128,10 @@ def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "chec
     async def on_user_turn_started(aggregator, strategy):
         state.unanswered = 0
         state.driver_turns += 1
+        if state.drift != state.drift_acted:  # the observer saw the answers slowing: watch more closely
+            state.drift_acted = state.drift
+            logger.warning(f"Drift {state.drift}: silence check every {recheck_after(state):.0f} s")
+            await aggregator.push_frame(UserIdleTimeoutUpdateFrame(timeout=recheck_after(state)), FrameDirection.UPSTREAM)
 
     pipeline =  Pipeline(
         [

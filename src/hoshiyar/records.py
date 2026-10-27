@@ -26,6 +26,7 @@ def save(state: CallState, kind: str) -> dict:
         "reply_delays": [(round(t, 1), round(d, 2)) for t, d in state.reply_delays],
         "alerts": state.alerts,
         "unresponsive": state.unresponsive,
+        "drift": state.drift,
         "break_taken": state.break_taken,
         "call_id": state.call_id,
     }
