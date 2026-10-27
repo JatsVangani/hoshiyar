@@ -14,6 +14,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection
 from hoshiyar.alerts import notify_fleet
+from hoshiyar.alerts import TASKS, notify_fleet
 
 OPENERS = {
     "checkin": "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?",
@@ -113,7 +114,7 @@ class CallState:
     driver: str = "driver"
     alerts: list[tuple[float, str]] = field(default_factory=list) # (seconds into call, text) for the fleet page
     break_taken: bool = False # driver agreed to stop; bot_phone schedules the wake-up call
-    background: list[asyncio.Task] = field(default_factory=list) # fleet alert dials awaited after the call
+    # background: list[asyncio.Task] = field(default_factory=list) # fleet alert dials awaited after the call
 
 def alert(state: CallState, kind: str, **extra) -> None:
     """Queue one fleet call of this kind per driver call. Never awaited inline: the driver must not wait for it"""
@@ -121,7 +122,9 @@ def alert(state: CallState, kind: str, **extra) -> None:
         return
     text = ALERTS[kind].format(driver=state.driver, t=time.strftime("%H:%M"), **extra)
     state.alerts.append((round(time.time() - state.started_at), f"[{kind}] {text}"))
-    state.background.append(asyncio.create_task(notify_fleet(text)))
+    task = asyncio.create_task(notify_fleet(text))
+    TASKS.add(task)
+    task.add_done_callback(TASKS.discard)
 
 def nudge_for(state: CallState) -> str:
     """What the bot says when the driver has been quiet for the mode's interval."""

@@ -1,7 +1,7 @@
 """HTTP front door. Run: uv run python -m hoshiyar.server   (keep `ngrok http 7860` running)"""
 
 import os
-
+from urllib.parse import parse_qs
 # import httpx
 import uvicorn
 from dotenv import load_dotenv
@@ -45,7 +45,10 @@ async def alert(alert_id: str):
 @app.post("/hangup")
 async def hangup(request: Request):
     """Vobiz tells us the call ended, with duration and cause. Useful for the logs."""
-    logger.info(f"Hangup event: {(await request.body()).decode()}")
+    body = (await request.body()).decode()
+    logger.info(f"Hangup event: {body}")
+    fields = {k: v[0] for k, v in parse_qs(body).items()}
+    alerts.call_ended(fields.get("RequestUUID", ""), fields.get("CallStatus", ""))
     return Response(content="OK")
 
 

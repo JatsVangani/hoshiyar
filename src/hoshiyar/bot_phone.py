@@ -70,7 +70,6 @@ async def run_phone_bot(websocket: WebSocket):
         await runner.cancel()
 
     await runner.run()
-    await asyncio.gather(*state.background, return_exceptions=True)
     logger.info(
         f"Call summary: scores={state.scores} final mode={state.mode} "
         f"reply delays={state.reply_delays} unresponsive={state.unresponsive} alerts={len(state.alerts)}"
