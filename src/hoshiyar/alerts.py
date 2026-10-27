@@ -12,8 +12,6 @@ PENDING: dict[str, str] = {} # alert id -> text; /alert/{id} reads it when the m
 TASKS: set[asyncio.Task] = set()
 
 _line = asyncio.Lock() # the manager has one phone: one alert call at a time, or the second one hits busy
-_ended: dict[str, str] = {} # request_uuid -> CallStatus from /hangup
-_ended_event = asyncio.Event()
 
 ALERT_CALL_TIMEOUT = 120.0 # ring + speech; give up waiting after this and move on
 RETRY_AFTER = 30.0 # seconds before a second try when the line was busy or nobody answered
@@ -33,31 +31,12 @@ async def notify_fleet(text: str) -> bool:
             except Exception as e: # the driver's call must never care
                 logger.error(f"Fleet alert call failed: {e}")
                 return False
-            status = await _wait_for_hangup(result["request_uuid"])
+            status = await vobiz.wait_for_hangup(result["request_uuid"], ALERT_CALL_TIMEOUT)
             logger.info(f"Fleet alert call {attempt}: {status}")
             if status == "completed":
                 return True
             await asyncio.sleep(RETRY_AFTER)
     return False
-
-def call_ended(request_uuid: str, status: str) -> None:
-    """server.py calls this from /hangup for every call; alert calls are the ones we are waiting on"""
-    _ended[request_uuid] = status
-    _ended_event.set()
-
-async def _wait_for_hangup(request_uuid: str) -> str:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + ALERT_CALL_TIMEOUT
-    while request_uuid not in _ended:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            return "timeout"
-        _ended_event.clear()
-        try:
-            await asyncio.wait_for(_ended_event.wait(), remaining)
-        except TimeoutError:
-            return "timeout"
-    return _ended.pop(request_uuid)
 
 def alert_xml(alert_id: str) -> str:
     """What Vobiz plays when the manager answers: the alert twice, then the call ends by itself."""

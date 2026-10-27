@@ -1,0 +1,4 @@
+[
+  {"name": "Ramesh", "phone": "+919999999999", "route": "Delhi to Mumbai, NH48", "checkins": ["23:00", "01:30", "04:00"]},
+  {"name": "Suresh", "phone": "+918888888888", "route": "Kolkata to Chennai, NH16", "checkins": ["00:00", "02:30"]}
+]

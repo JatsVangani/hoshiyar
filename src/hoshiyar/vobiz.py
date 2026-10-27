@@ -1,11 +1,15 @@
 """Thin Vobiz REST cliet: dial out and hang up. Credentials come from the environment"""
 
 import os
+import asyncio
 
 import httpx
 from loguru import logger
 
 API = "https://api.vobiz.ai/api/v1"
+
+_ended: dict[str, str] = {}  # request_uuid -> CallStatus from /hangup
+_ended_event = asyncio.Event()
 
 def _auth() -> tuple[str, dict]:
     auth_id = os.environ["VOBIZ_AUTH_ID"]
@@ -37,3 +41,23 @@ async def hangup(call_uuid: str) -> None:
         r = await client.delete(f"{API}/Account/{auth_id}/Call/{call_uuid}", headers=headers)
     logger.info(f"Vobiz hangup {call_uuid}: {r.status_code}")
 
+def call_ended(request_uuid: str, status: str) -> None:
+    """server.py calls this from /hangup for every call; whoever dialed it may be waiting."""
+    _ended[request_uuid] = status
+    _ended_event.set()
+
+
+async def wait_for_hangup(request_uuid: str, timeout: float) -> str:
+    """Block until /hangup reports this call over. Returns its CallStatus, or "timeout"."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while request_uuid not in _ended:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return "timeout"
+        _ended_event.clear()
+        try:
+            await asyncio.wait_for(_ended_event.wait(), remaining)
+        except TimeoutError:
+            return "timeout"
+    return _ended.pop(request_uuid)

@@ -1,6 +1,8 @@
 """HTTP front door. Run: uv run python -m hoshiyar.server   (keep `ngrok http 7860` running)"""
 
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from urllib.parse import parse_qs
 # import httpx
 import uvicorn
@@ -10,19 +12,29 @@ from fastapi.responses import Response
 from loguru import logger
 
 from hoshiyar.bot_phone import run_phone_bot
-from hoshiyar import vobiz, alerts
+from hoshiyar import vobiz, alerts, scheduler
 
 load_dotenv()
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    rota = asyncio.create_task(scheduler.run_rota())  # the nightly rota runs for as long as the server does
+    yield
+    rota.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # VOBIZ_API = "https://api.vobiz.ai/api/v1"
 
 
 @app.post("/dialout")
 async def dialout():
-    """Ring MY_PHONE. When it picks up, Vobiz POSTs to /answer for instructions."""
-    return await vobiz.dial(os.environ["MY_PHONE"], os.environ["LOCAL_SERVER_URL"])
+    """Ring MY_PHONE now as a check-in, outside the rota. Redials like a rota call if nobody picks up."""
+    driver = scheduler.driver_for(os.environ["MY_PHONE"])
+    scheduler.spawn(scheduler.place_call(driver, "checkin"))
+    return {"calling": driver["name"]}
 
 
 @app.post("/answer")
@@ -48,7 +60,7 @@ async def hangup(request: Request):
     body = (await request.body()).decode()
     logger.info(f"Hangup event: {body}")
     fields = {k: v[0] for k, v in parse_qs(body).items()}
-    alerts.call_ended(fields.get("RequestUUID", ""), fields.get("CallStatus", ""))
+    vobiz.call_ended(fields.get("RequestUUID", ""), fields.get("CallStatus", ""))
     return Response(content="OK")
 
 

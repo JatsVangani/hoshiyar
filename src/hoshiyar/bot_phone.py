@@ -43,10 +43,14 @@ async def run_phone_bot(websocket: WebSocket):
         ),
     )
 
-    kind = scheduler.CALL_KINDS.pop(call_data["call_id"], "checkin") # a wake-up call or a normal check-in
+    # The rota tagged this call with its kind and driver; an untagged call is a test to MY_PHONE.
+    info = scheduler.CALLS.pop(call_data["call_id"], None) or {
+        "kind": "checkin", "driver": scheduler.driver_for(os.environ.get("MY_PHONE", "driver"))
+    }
+    kind = info["kind"]
     pipeline, state = build_pipeline(transport, PHONE_SAMPLE_RATE, kind)
     state.call_id = call_data["call_id"]
-    state.driver = os.environ.get("MY_PHONE", "driver") 
+    state.driver = info["driver"]["name"]
 
     worker = PipelineWorker(
         pipeline,
@@ -76,6 +80,6 @@ async def run_phone_bot(websocket: WebSocket):
     )
     records.save(state, kind) # the fleet page reads this;
     if state.break_taken:
-        scheduler.schedule_wakeup(state.driver)
+        scheduler.schedule_wakeup(info["driver"])
     if state.hangup_requested:
         await vobiz.hangup(state.call_id)
