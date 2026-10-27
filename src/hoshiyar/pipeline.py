@@ -23,7 +23,7 @@ from pipecat.services.groq.llm import GroqLLMService
 from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.google.llm import GoogleLLMService
 
-from hoshiyar.brain import OPENER, PERSONA, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for 
+from hoshiyar.brain import OPENER, persona_for, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for 
 
 from pipecat.turns.user_mute.mute_until_first_bot_complete_user_mute_strategy import (
     MuteUntilFirstBotCompleteUserMuteStrategy,
@@ -47,17 +47,17 @@ LLM_PROVIDERS = {
 #     "Chhote jawab do, ek ya do vaakya. Devanagari mein likho, koi markdown ya asterisk nahi."
 # )
 
-def opener_frame() -> TTSSpeakFrame:
+def opener_frame(text: str = OPENER) -> TTSSpeakFrame:
     """The first thing the driver hears, spoken straight from TTS so there is no LLM wait.
 
     append_to_context=False: the system prompt already tells the model this was said.
     interruptible=False: the driver's reflexive 'hello' on pickup must not cut it off.
     """
-    frame = TTSSpeakFrame(OPENER, append_to_context=False)
+    frame = TTSSpeakFrame(text, append_to_context=False)
     frame.interruptible = False
     return frame
 
-def make_llm():
+def make_llm(kind: str = "checkin"):
     provider = os.environ.get("LLM_PROVIDER", "sarvam").lower()
     if provider not in LLM_PROVIDERS:
         raise ValueError(f"LLM_PROVIDER must be one of {sorted(LLM_PROVIDERS)}, not {provider!r}")
@@ -66,10 +66,10 @@ def make_llm():
     logger.info(f"LLM: {provider} / {model}")
     return service(
         api_key=os.environ[key_var],
-        settings=service.Settings(model=model, system_instruction=PERSONA, **extra),
+        settings=service.Settings(model=model, system_instruction=persona_for(kind), **extra),
     )
 
-def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline, CallState]:
+def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "checkin") -> tuple[Pipeline, CallState]:
     # Speech to text. Sarvam accepts 8000 or 16000 Hz, so we tell it which one.
     stt = SarvamRealtimeSTTService(
         api_key=os.environ["SARVAM_API_KEY"],
@@ -83,7 +83,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline
     )
 
     # The brain. system_instructions lives inside Settings in Pipecat 1.14
-    llm = make_llm()
+    llm = make_llm(kind)
 
     # Text to speech, generated at the transport's rate so nothing is resampled.
     tts = SarvamTTSService(
@@ -126,6 +126,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int) -> tuple[Pipeline
     @user_agg.event_handler("on_user_turn_started")
     async def on_user_turn_started(aggregator, strategy):
         state.unanswered = 0
+        state.driver_turns += 1
 
     pipeline =  Pipeline(
         [

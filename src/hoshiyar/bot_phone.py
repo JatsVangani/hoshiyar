@@ -14,8 +14,12 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 from pipecat.workers.runner import WorkerRunner
 
 from hoshiyar.pipeline import build_pipeline
-from hoshiyar import vobiz
+from hoshiyar import vobiz, scheduler
 from hoshiyar.signals import ReplyDelayObserver
+from hoshiyar.brain import OPENERS
+
+import asyncio
+import os
 
 PHONE_SAMPLE_RATE = 8000  # mu-law over the telephone network
 
@@ -39,8 +43,10 @@ async def run_phone_bot(websocket: WebSocket):
         ),
     )
 
-    pipeline, state = build_pipeline(transport, PHONE_SAMPLE_RATE)
+    kind = scheduler.CALL_KINDS.pop(call_data["call_id"], "checkin") # a wake-up call or a normal check-in
+    pipeline, state = build_pipeline(transport, PHONE_SAMPLE_RATE, kind)
     state.call_id = call_data["call_id"]
+    state.driver = os.environ.get("MY_PHONE", "driver") 
 
     worker = PipelineWorker(
         pipeline,
@@ -57,16 +63,19 @@ async def run_phone_bot(websocket: WebSocket):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        await worker.queue_frames([opener_frame()])  # bot speaks first
+        await worker.queue_frames([opener_frame(OPENERS[kind])])  # bot speaks first
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         await runner.cancel()
 
     await runner.run()
+    await asyncio.gather(*state.background, return_exceptions=True)
     logger.info(
         f"Call summary: scores={state.scores} final mode={state.mode} "
-        f"reply delays={state.reply_delays} unresponsive={state.unresponsive}"
+        f"reply delays={state.reply_delays} unresponsive={state.unresponsive} alerts={len(state.alerts)}"
     )
+    if state.break_taken:
+        scheduler.schedule_wakeup(state.driver)
     if state.hangup_requested:
         await vobiz.hangup(state.call_id)
