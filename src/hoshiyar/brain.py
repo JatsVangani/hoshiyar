@@ -14,6 +14,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection
 from hoshiyar.alerts import TASKS, notify_fleet
+from hoshiyar import trivia
 
 OPENERS = {
     "checkin": "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?",
@@ -61,9 +62,10 @@ MODES = {
     ),
     "HEAVY": (
         "Driver ko neend aa rahi hai (7 se 9). Mode HEAVY: pehle saaf bolo ki agle dhabe ya safe jagah par bees minute rukna chahiye. "
-        "Phir driver ko jagaye rakhne ke liye tez sawaal-jawaab karo. Sirf aise sawaal jinka jawab tumhe pakka pata ho: "
-        "rajdhaniyan, purani filmein aur gaane, cricket ke purane record, ya driver ki apni gaadi aur raasta "
-        "(agla shehar, raftaar, kitne ghante chale). Kal raat ka match ya taaza score kabhi mat poochho. "
+        "Phir driver ko jagaye rakhne ke liye tez sawaal-jawaab karo. Sawaal 'questions' list se lo, ek baar mein ek, "
+        "usi kram mein. Driver ke jawab par chhota sa 'sahi' ya sahi jawab batao, phir agla sawaal. List khatam ho jaaye "
+        "toh more_questions tool call karo; apne sawaal mat banao. Beech-beech mein driver ki apni gaadi aur raaste ke "
+        "sawaal bhi chalenge (agla shehar, raftaar, kitne ghante chale). Kal raat ka match ya taaza score kabhi mat poochho. "
         "Chhote sawaal, jaldi-jaldi. Driver ko sochne aur bolne par majboor karo. "
         "Agar driver maan jaaye ki woh ruk raha hai, jaise 'theek hai rukta hoon' ya 'dhaba aa gaya', "
         "toh end_call reason 'break' ke saath call karo aur farewell mein bolo ki bees minute baad phir call karoge. "
@@ -115,6 +117,7 @@ class CallState:
     driver: str = "driver"
     alerts: list[tuple[float, str]] = field(default_factory=list) # (seconds into call, text) for the fleet page
     break_taken: bool = False # driver agreed to stop; bot_phone schedules the wake-up call
+    asked: list[str] = field(default_factory=list)  # trivia questions already used on this call
     drift: str = "steady"  # steady | drifting | drifted, from signals.drift over reply_delays
     drift_acted: str = "steady"  # the drift level we have already tightened the timer for
     drift_asked: str = "steady"  # the drift level we have already re-asked the check-in for
@@ -170,7 +173,14 @@ def make_tools(state: CallState):
         await params.llm.push_frame(
             UserIdleTimeoutUpdateFrame(timeout=recheck_after(state)), FrameDirection.UPSTREAM
         )
-        await params.result_callback({"recorded": score, "mode": state.mode, "instructions": MODES[state.mode]})
+        result = {"recorded": score, "mode": state.mode, "instructions": MODES[state.mode]}
+        if state.mode == "HEAVY":
+            result["questions"] = trivia.fresh(state.asked)
+        await params.result_callback(result)
+
+    async def more_questions(params: FunctionCallParams):
+        """Get the next batch of quiz questions with answers when the current list is used up (HEAVY mode only)."""
+        await params.result_callback({"questions": trivia.fresh(state.asked)})
 
     async def end_call(params: FunctionCallParams, farewell: str, reason: str = "goodbye"):
         """End the call after speaking a short farewell. Use when the driver says goodbye, asks to stop, or agrees to take a break.
@@ -191,4 +201,4 @@ def make_tools(state: CallState):
         await params.llm.push_frame(TTSSpeakFrame(farewell))
         await params.llm.push_frame(EndWorkerFrame(reason="bot ended call"))
 
-    return [record_sleepiness, end_call]
+    return [record_sleepiness, more_questions, end_call]
