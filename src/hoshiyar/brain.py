@@ -13,7 +13,6 @@ from pipecat.frames.frames import (
     UserIdleTimeoutUpdateFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
-from hoshiyar.alerts import notify_fleet
 from hoshiyar.alerts import TASKS, notify_fleet
 
 OPENERS = {
@@ -114,7 +113,6 @@ class CallState:
     driver: str = "driver"
     alerts: list[tuple[float, str]] = field(default_factory=list) # (seconds into call, text) for the fleet page
     break_taken: bool = False # driver agreed to stop; bot_phone schedules the wake-up call
-    # background: list[asyncio.Task] = field(default_factory=list) # fleet alert dials awaited after the call
 
 def alert(state: CallState, kind: str, **extra) -> None:
     """Queue one fleet call of this kind per driver call. Never awaited inline: the driver must not wait for it"""

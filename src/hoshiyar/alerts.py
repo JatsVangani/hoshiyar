@@ -12,14 +12,14 @@ PENDING: dict[str, str] = {} # alert id -> text; /alert/{id} reads it when the m
 TASKS: set[asyncio.Task] = set()
 
 _line = asyncio.Lock() # the manager has one phone: one alert call at a time, or the second one hits busy
-_ended = dict[str, str] = {} # request_uuid -> CallStatus from /hangup
+_ended: dict[str, str] = {} # request_uuid -> CallStatus from /hangup
 _ended_event = asyncio.Event()
 
 ALERT_CALL_TIMEOUT = 120.0 # ring + speech; give up waiting after this and move on
 RETRY_AFTER = 30.0 # seconds before a second try when the line was busy or nobody answered
 
 async def notify_fleet(text: str) -> bool:
-    """Ring FLEET_PHONE (MY_PHONE if unset) and speak the alert. True when Vobiz queued the call"""
+    """Ring FLEET_PHONE (MY_PHONE if unset) and speak the alert. True when the manager heard it."""
     to = os.environ.get("FLEET_PHONE") or os.environ.get("MY_PHONE")
     logger.warning(f"FLEET ALERT -> {to}: {text}")
     if not to:
@@ -29,7 +29,7 @@ async def notify_fleet(text: str) -> bool:
     async with _line:
         for attempt in (1, 2):
             try:
-                await vobiz.dial(to, os.environ["LOCAL_SERVER_URL"], answer_path=f"/alert/{alert_id}")
+                result = await vobiz.dial(to, os.environ["LOCAL_SERVER_URL"], answer_path=f"/alert/{alert_id}")
             except Exception as e: # the driver's call must never care
                 logger.error(f"Fleet alert call failed: {e}")
                 return False
@@ -46,7 +46,7 @@ def call_ended(request_uuid: str, status: str) -> None:
     _ended_event.set()
 
 async def _wait_for_hangup(request_uuid: str) -> str:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     deadline = loop.time() + ALERT_CALL_TIMEOUT
     while request_uuid not in _ended:
         remaining = deadline - loop.time()
@@ -57,7 +57,7 @@ async def _wait_for_hangup(request_uuid: str) -> str:
             await asyncio.wait_for(_ended_event.wait(), remaining)
         except TimeoutError:
             return "timeout"
-        return _ended.pop(request_uuid)
+    return _ended.pop(request_uuid)
 
 def alert_xml(alert_id: str) -> str:
     """What Vobiz plays when the manager answers: the alert twice, then the call ends by itself."""
