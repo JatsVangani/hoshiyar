@@ -4,24 +4,31 @@
 hears how tired he is, keeps him talking, gets him to stop when it is not safe, and tells his fleet.
 Nothing goes into the cab: it works on the phone the driver already has.
 
-![Hoshiyar homepage](docs/home.jpg)
-
 **Live:** [ow2xj.aiccloud.online](https://ow2xj.aiccloud.online) · **Fleet screen:** [/fleet](https://ow2xj.aiccloud.online/fleet)
 (press *Try it now* to get a real check-in call on your own phone)
 
+![Hoshiyar homepage](docs/home.jpg)
+
 ---
 
-## The problem
+## 01 · The problem: one road death in five involves a truck
 
 | | |
 |---|---|
-| **1 in 5** | Trucks were the striking vehicle in 32,362 of India's 1,77,175 road deaths in 2024. |
+| **32,362** | People killed in 2024 where a truck was the striking vehicle, out of India's 1,77,175 road deaths. |
 | **49%** | Truck drivers who say they drive even when sleepy, after 11.9 hours at the wheel a day. |
-| **2028** | The year India makes drowsiness warning (AIS-184) mandatory, and only on new trucks. Today's fleet gets nothing. |
+| **0** | Boxes for fatigue on an Indian accident form. Most of these deaths are booked as over-speeding. |
 
-Fatigue has no box on an Indian accident form, so most of these deaths are booked as over-speeding.
+## 02 · Why now: the mandate leaves today's trucks out
 
-## A call
+India makes driver drowsiness warning (AIS-184) mandatory on every new truck and bus from **1 January 2028**,
+after the EU did the same in July 2024. The mandate covers trucks built after 2028, and the mandated device
+only beeps. The trucks on the road tonight get nothing. Meanwhile, voice AI in Indian languages has become fast
+and cheap enough to hold a real conversation over an ordinary phone line.
+
+## 03 · The solution: a co-driver on a phone call
+
+Hoshiyar does what a human co-driver does: it talks to the driver, notices when he is fading, and makes him stop.
 
 ```
 Hoshiyar  नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?          Hello, Hoshiyar here. How are you?
@@ -34,11 +41,16 @@ Driver    जयपुर।                                                  Ja
 *Illustrative. The bot's lines and the question come from the real persona and question bank.*
 
 Behind the scenes, that call recorded a HEAVY sleepiness score and rang the fleet manager with a spoken alert.
-Once the driver agrees to stop, a wake-up call is booked for twenty minutes later. The fleet manager sees it here:
+Once the driver agrees to stop, a wake-up call is booked for twenty minutes later.
+
+## 04 · The fleet manager sees the whole night on one screen
 
 ![Fleet screen](docs/fleet.jpg)
 
-## How it works
+Each driver's state, sleepiness score, reply-delay trend, next check-in and alerts, refreshed every 20 seconds.
+[Open it live.](https://ow2xj.aiccloud.online/fleet)
+
+## 05 · How it works
 
 ```
 Vobiz phone call ──wss──▶ FastAPI /ws ──▶ Pipecat pipeline
@@ -53,6 +65,31 @@ Vobiz phone call ──wss──▶ FastAPI /ws ──▶ Pipecat pipeline
    events each phone the fleet manager.
 5. **Wake up.** After a break the driver gets a call back to check he is fit to drive on.
 
+## 06 · Why it is different
+
+| A drowsiness device | Hoshiyar |
+|---|---|
+| Fitted to new trucks from 2028 | Works on every truck tonight, on the driver's own phone |
+| Beeps | Talks, asks, quizzes and orders a break |
+| Tells the driver only | Phones the fleet manager when it matters |
+| One language: a beep | Hindi, Telugu, Kannada, Marathi and English, switched mid-call |
+
+## 07 · Proof: it is live and measured
+
+- **Live** at [ow2xj.aiccloud.online](https://ow2xj.aiccloud.online), ringing real Indian phone numbers.
+- **First word 0.35 s** after pickup; **0.6 s** from the driver finishing to the reply starting.
+- **Under ₹1,000** per driver per month at list prices, for three calls a night.
+- **Grounded in research:** a trivia task kept truck drivers alert in a simulator (Oron-Gilad et al. 2008),
+  and fatigued drivers want stimulating talk while alert ones want silence. Hence the default is quiet.
+
+## 08 · Next
+
+- A night-shift pilot with a real fleet, to tune the score and the alert thresholds against what drivers report.
+- More languages: Tamil, Bengali and Punjabi cover most of the remaining long-haul drivers.
+- Feed the fleet's own trip data (hours driven, stops) into when and how often Hoshiyar calls.
+
+---
+
 ## Engineering notes
 
 - **Language switch mid-call.** Calls open in Hindi. If the driver answers in Telugu, Kannada, Marathi or English,
@@ -66,12 +103,6 @@ Vobiz phone call ──wss──▶ FastAPI /ws ──▶ Pipecat pipeline
   no arithmetic, because working-memory puzzles hurt driving.
 - **Voice OTP.** The *Try* button reads a four-digit code to your phone before it books a call, with limits on
   attempts, bookings and calls per night.
-- **Measured on real calls:** first word 0.35 s after pickup; 0.6 s from the driver finishing to the reply
-  starting. At list prices, three calls a night cost under ₹1,000 per driver per month.
-
-The design follows the alertness literature: a trivia task kept truck drivers alert in a simulator
-(Oron-Gilad et al. 2008), and fatigued drivers want stimulating talk while alert ones want silence. Hence the
-default is quiet.
 
 ## Run it yourself
 
