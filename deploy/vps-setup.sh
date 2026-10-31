@@ -20,7 +20,7 @@ timedatectl set-timezone Asia/Kolkata
 echo "== packages =="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q curl ca-certificates build-essential portaudio19-dev debian-keyring debian-archive-keyring apt-transport-https gnupg
+apt-get install -y -q curl ca-certificates build-essential python3-dev portaudio19-dev debian-keyring debian-archive-keyring apt-transport-https gnupg
 if ! command -v caddy >/dev/null; then
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
