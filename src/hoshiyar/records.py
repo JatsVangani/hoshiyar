@@ -29,6 +29,7 @@ def save(state: CallState, kind: str) -> dict:
         "drift": state.drift,
         "break_taken": state.break_taken,
         "call_id": state.call_id,
+        "lang": state.lang,  # the language the call ended in; auto = stayed Hindi, never switched
     }
     CALLS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with CALLS_FILE.open("a", encoding="utf-8") as f:

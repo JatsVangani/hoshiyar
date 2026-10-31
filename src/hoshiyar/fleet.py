@@ -9,7 +9,7 @@ ships with a glyph and a label, and every number on a mark is also in the call l
 from datetime import datetime, timedelta
 from html import escape
 
-from hoshiyar import records, scheduler, trials
+from hoshiyar import records, scheduler, trials, langs
 
 REFRESH_SECONDS = 20
 NIGHT_HOURS = 24  # "tonight" = calls in the last 24 h
@@ -118,7 +118,7 @@ def render(now: datetime | None = None, try_id: str | None = None, done_id: str 
         cards.append(
             f"<article class='card {sev}'>"
             f"<header><div><h3>{escape(name)}{' <small class=tag>trial</small>' if d.get('trial') else ''}</h3>"
-            f"<div class='route'>{escape(d['route']) or '&nbsp;'}</div></div>"
+            f"<div class='route'>{escape(d['route']) or '&nbsp;'}{_lang_tag(d, c)}</div></div>"
             f"<span class='pill {sev}'><i>{glyph}</i>{label}</span></header>"
             f"<div class='row'><div class='stat'><label>Sleepiness</label>{meter(score)}</div>"
             f"<div class='stat'><label>Reply delay</label>{sparkline(c['reply_delays'] if c else [])}</div></div>"
@@ -142,7 +142,8 @@ def render(now: datetime | None = None, try_id: str | None = None, done_id: str 
     alerts_html = f"<ul class='feed'>{''.join(alert_items)}</ul>" if alert_items else "<div class='empty'>No alerts tonight. Good.</div>"
 
     log_rows = [
-        f"<tr><td>{c['started_at'][5:16]}</td><td><b>{escape(c['driver'])}</b></td><td>{c['kind']}</td>"
+        f"<tr><td>{c['started_at'][5:16]}</td><td><b>{escape(c['driver'])}</b></td>"
+        f"<td>{c['kind']}{'' if c.get('lang', 'hi') in ('auto', 'hi') else ' &middot; ' + c['lang']}</td>"
         f"<td class='num'>{c['duration']:.0f} s</td><td class='num'>{', '.join(str(s) for _, s in c['scores'])}</td>"
         f"<td>{_mode_text(c)}</td>"
         f"<td class='num' title='{_all_delays(c)}'>{_trend_text(c)}</td>"
@@ -204,11 +205,22 @@ def try_block(now: datetime, try_id: str | None, done_id: str | None, error: str
         "<input name='name' placeholder='Your name' maxlength='40' required>"
         "<span class='phone'><i>+91</i><input name='phone' inputmode='numeric' placeholder='98765 43210' maxlength='13' required></span>"
         f"<input name='at' type='time' value='{soon}' required>"
+        "<select name='lang'><option value='auto'>Hindi, or let me choose</option><option value='hi'>Hindi</option>"
+        "<option value='te'>Telugu</option><option value='kn'>Kannada</option><option value='mr'>Marathi</option>"
+        "<option value='en'>English</option></select>"
         "<button>Call me with a code</button></form>"
         "<p class='hint'>We ring this number, read a 4-digit code, and schedule the check-in call once you type it. "
         "Only you can book your number. Default time is two minutes from now; pick any time tonight.</p>"
         "</section>"
     )
+
+
+def _lang_tag(d: dict, c: dict | None) -> str:
+    """The call's language if it ended in one other than Hindi, else the roster's fixed language if any."""
+    lang = (c or {}).get("lang") or d.get("lang", "auto")
+    if lang in ("auto", "hi"):
+        return ""
+    return f" &middot; {langs.name(lang)}"
 
 
 def _mode_text(c: dict) -> str:
@@ -279,7 +291,7 @@ th{color:var(--muted);font-weight:500;font-size:13px} tbody tr:last-child td{bor
 .try p{margin:0 0 10px} .try .hint{margin:10px 0 0;color:var(--muted);font-size:13px} .try .err{color:var(--critical);font-weight:600}
 .try form{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch} .try input,.try button{font:inherit;border-radius:8px;padding:9px 12px;border:1px solid var(--ring);background:var(--plane);color:var(--ink)}
 .try input{min-width:150px;flex:1} .try .phone{display:flex;flex:1;min-width:190px} .try .phone i{font-style:normal;color:var(--muted);padding:9px 0 9px 12px;background:var(--plane);border:1px solid var(--ring);border-right:0;border-radius:8px 0 0 8px}
-.try .phone input{border-radius:0 8px 8px 0;border-left:0;min-width:0} .try input[type=time]{flex:0 0 auto;min-width:0}
+.try .phone input{border-radius:0 8px 8px 0;border-left:0;min-width:0} .try input[type=time]{flex:0 0 auto;min-width:0} .try select{font:inherit;border-radius:8px;padding:9px 12px;border:1px solid var(--ring);background:var(--plane);color:var(--ink)}
 .try button{background:var(--ink);color:var(--plane);font-weight:600;border:0;cursor:pointer} .try .row2 input{flex:0 0 120px;font-size:22px;letter-spacing:.3em;text-align:center}
 .try .again{margin-top:8px} .try .link{background:none;color:var(--muted);font-weight:400;padding:0;text-decoration:underline}
 .card h3 .tag{font-size:11px;font-weight:600;color:var(--series);text-transform:uppercase;letter-spacing:.08em;margin-left:6px;vertical-align:middle}

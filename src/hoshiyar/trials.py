@@ -77,7 +77,10 @@ def due_at(hhmm: str, now: datetime) -> datetime:
     return due
 
 
-def create(name: str, phone: str, hhmm: str, now: datetime | None = None) -> dict:
+LANGS = ("auto", "hi", "te", "kn", "mr", "en")
+
+
+def create(name: str, phone: str, hhmm: str, now: datetime | None = None, lang: str = "auto") -> dict:
     """Book a code call. Raises TrialError with the sentence to show when the rules say no."""
     now = now or datetime.now()
     name = (name or "").strip()[:40]
@@ -105,6 +108,7 @@ def create(name: str, phone: str, hhmm: str, now: datetime | None = None) -> dic
         raise TrialError("No more trials tonight. Come back tomorrow.")
     entry = {
         "id": uuid.uuid4().hex[:10], "name": name, "phone": number, "due": due.timestamp(),
+        "lang": lang if lang in LANGS else "auto",
         "at": f"{due:%H:%M}", "code": f"{secrets.randbelow(10000):04d}", "created": t,
         "wrong_codes": 0, "code_calls": 0, "verified": False, "locked_until": 0.0,
     }
@@ -163,6 +167,7 @@ def speak_text(trial_id: str) -> str:
 def drivers() -> list[dict]:
     """Verified trials as one-night roster entries, due as an absolute time rather than a daily slot."""
     return [
-        {"name": r["name"], "phone": r["phone"], "route": "Trial", "checkins": [r["at"]], "due": r["due"], "trial": True}
+        {"name": r["name"], "phone": r["phone"], "route": "Trial", "checkins": [r["at"]], "due": r["due"], "trial": True,
+         "lang": r.get("lang", "auto")}
         for r in load() if r["verified"]
     ]

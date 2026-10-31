@@ -1,0 +1,107 @@
+[
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Maharashtra?",
+  "a": "Mumbai"
+ },
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Karnataka?",
+  "a": "Bengaluru"
+ },
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Tamil Nadu?",
+  "a": "Chennai"
+ },
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Rajasthan?",
+  "a": "Jaipur"
+ },
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Telangana?",
+  "a": "Hyderabad"
+ },
+ {
+  "t": "rajdhani",
+  "q": "What is the capital of Punjab?",
+  "a": "Chandigarh"
+ },
+ {
+  "t": "film",
+  "q": "Who directed Baahubali?",
+  "a": "S. S. Rajamouli"
+ },
+ {
+  "t": "film",
+  "q": "Who is the hero of the KGF films?",
+  "a": "Yash"
+ },
+ {
+  "t": "film",
+  "q": "Who played the lead in Sholay as Jai?",
+  "a": "Amitabh Bachchan"
+ },
+ {
+  "t": "film",
+  "q": "Who is known as the King of Romance in Bollywood?",
+  "a": "Shah Rukh Khan"
+ },
+ {
+  "t": "film",
+  "q": "Which film has the song Jai Ho?",
+  "a": "Slumdog Millionaire"
+ },
+ {
+  "t": "cricket",
+  "q": "Who captained India to the 1983 World Cup?",
+  "a": "Kapil Dev"
+ },
+ {
+  "t": "cricket",
+  "q": "Who captained India to the 2011 World Cup?",
+  "a": "M. S. Dhoni"
+ },
+ {
+  "t": "cricket",
+  "q": "How many international centuries did Sachin Tendulkar score?",
+  "a": "One hundred"
+ },
+ {
+  "t": "cricket",
+  "q": "How many players are in a cricket team?",
+  "a": "Eleven"
+ },
+ {
+  "t": "cricket",
+  "q": "Which player is called The Wall?",
+  "a": "Rahul Dravid"
+ },
+ {
+  "t": "raasta",
+  "q": "Which is the longest national highway in India?",
+  "a": "NH 44, Srinagar to Kanyakumari"
+ },
+ {
+  "t": "raasta",
+  "q": "Which highway runs from Delhi to Mumbai?",
+  "a": "NH 48"
+ },
+ {
+  "t": "raasta",
+  "q": "Which was India's first expressway?",
+  "a": "The Mumbai-Pune Expressway"
+ },
+ {
+  "t": "raasta",
+  "q": "Which highway runs along the east coast from Chennai to Kolkata?",
+  "a": "NH 16"
+ },
+ {
+  "t": "raasta",
+  "q": "Which city is called the Pink City?",
+  "a": "Jaipur"
+ }
+]

@@ -83,7 +83,7 @@ async def try_hoshiyar(request: Request):
     """The Try form: book a code call. Refusals go back to the page as ?err=."""
     form = await _form(request)
     try:
-        entry = trials.create(form.get("name", ""), form.get("phone", ""), form.get("at", ""))
+        entry = trials.create(form.get("name", ""), form.get("phone", ""), form.get("at", ""), lang=form.get("lang", "auto"))
         trials.note_call(entry["id"])
     except Pending as e:  # they closed the box while the phone was ringing: back to it
         return _back(**{"try": e.trial_id})

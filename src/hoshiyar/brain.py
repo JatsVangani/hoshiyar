@@ -9,12 +9,15 @@ from pipecat.services.llm_service import FunctionCallParams
 from pipecat.frames.frames import (
     EndWorkerFrame,
     FunctionCallResultProperties,
+    STTUpdateSettingsFrame,
     TTSSpeakFrame,
+    TTSUpdateSettingsFrame,
     UserIdleTimeoutUpdateFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
+from pipecat.services.settings import STTSettings, TTSSettings
 from hoshiyar.alerts import TASKS, notify_fleet
-from hoshiyar import trivia
+from hoshiyar import trivia, langs
 
 OPENERS = {
     "checkin": "नमस्ते, मैं होशियार बोल रहा हूँ। आप कैसे हो?",
@@ -46,9 +49,17 @@ PERSONA = (
     "Taaza khabar, aaj ka match ya score tumhe nahi pata. Jo nahi pata, seedha bolo 'mujhe nahi pata'; kabhi bana kar mat bolo. "
 )
 
-def persona_for(kind: str) -> str:
-    """The system prompt for one kind of call: the persona plus what the fixed opener already said."""
-    return PERSONA + f"Call uthte hi tum keh chuke ho: '{OPENERS[kind]}' " + KIND_NOTES[kind]
+def persona_for(kind: str, lang: str = "hi") -> str:
+    """The system prompt for one kind of call: the persona plus what the fixed opener already said.
+
+    Hindi ("hi") is exactly the original. "auto" is Hindi plus the offer-a-language rule. Any other
+    language adds that language's note so the model speaks it from the first turn."""
+    base = PERSONA + f"Call uthte hi tum keh chuke ho: '{langs.spoken(lang, 'opener_' + kind)}' " + KIND_NOTES[kind]
+    if lang == "auto":
+        return base + langs.AUTO_NOTE
+    if lang in langs.STRINGS:
+        return base + langs.STRINGS[lang]["note"]
+    return base
 
 MODES = {
     "QUIET": (
@@ -121,6 +132,8 @@ class CallState:
     drift: str = "steady"  # steady | drifting | drifted, from signals.drift over reply_delays
     drift_acted: str = "steady"  # the drift level we have already tightened the timer for
     drift_asked: str = "steady"  # the drift level we have already re-asked the check-in for
+    lang: str = "hi"  # hi | te | kn | mr | en | auto (Hindi until the driver picks another)
+    offered: bool = False  # the language menu has been read once this call
 
 def alert(state: CallState, kind: str, **extra) -> None:
     """Queue one fleet call of this kind per driver call. Never awaited inline: the driver must not wait for it"""
@@ -136,16 +149,16 @@ def nudge_for(state: CallState) -> str:
     """What the bot says when the driver has been quiet for the mode's interval."""
     state.unanswered += 1
     if state.driver_turns == 0:
-        return "हैलो, सुनाई दे रहा है? " + CHECK_IN
+        return langs.spoken(state.lang, "first_nudge")
     if state.drift != "steady" and state.drift_asked != state.drift:  # slowing answers: re-ask once per level
         state.drift_asked = state.drift
-        return DRIFT_LINE
+        return langs.spoken(state.lang, "drift")
     if state.mode == "HEAVY" and state.unanswered >= 2:
         state.unresponsive = True
         logger.warning(f"Driver unresponsive: {state.unanswered} HEAVY nudges unanswered")
         alert(state, "UNRESPONSIVE")
-        return ALARM
-    return NUDGES[state.mode]
+        return langs.spoken(state.lang, "alarm")
+    return langs.spoken(state.lang, "nudge_heavy" if state.mode == "HEAVY" else "nudge")
 
 def recheck_after(state: CallState) -> float:
     """Silence interval for the current mode, one level tighter while the driver's answers are slowing."""
@@ -175,12 +188,12 @@ def make_tools(state: CallState):
         )
         result = {"recorded": score, "mode": state.mode, "instructions": MODES[state.mode]}
         if state.mode == "HEAVY":
-            result["questions"] = trivia.fresh(state.asked)
+            result["questions"] = trivia.fresh(state.asked, lang=_bank(state))
         await params.result_callback(result)
 
     async def more_questions(params: FunctionCallParams):
         """Get the next batch of quiz questions with answers when the current list is used up (HEAVY mode only)."""
-        await params.result_callback({"questions": trivia.fresh(state.asked)})
+        await params.result_callback({"questions": trivia.fresh(state.asked, lang=_bank(state))})
 
     async def end_call(params: FunctionCallParams, farewell: str, reason: str = "goodbye"):
         """End the call after speaking a short farewell. Use when the driver says goodbye, asks to stop, or agrees to take a break.
@@ -201,4 +214,54 @@ def make_tools(state: CallState):
         await params.llm.push_frame(TTSSpeakFrame(farewell))
         await params.llm.push_frame(EndWorkerFrame(reason="bot ended call"))
 
-    return [record_sleepiness, more_questions, end_call]
+    async def offer_languages(params: FunctionCallParams, detected: str):
+        """The driver answered in a language other than Hindi: read him the languages Hoshiyar speaks and wait.
+
+        Args:
+            detected: The language the driver spoke, one of te (Telugu), kn (Kannada), mr (Marathi), en (English).
+        """
+        if state.offered or state.lang != "auto":
+            await params.result_callback({"status": "already offered", "instructions": "Hindi mein hi aage badho."})
+            return
+        state.offered = True
+        lang = detected if detected in langs.STRINGS else "hi"
+        logger.info(f"Language offer: driver spoke {detected!r}, menu read in {lang}")
+        if lang != "hi":  # read the menu in the language he just used
+            await params.llm.push_frame(TTSUpdateSettingsFrame(delta=TTSSettings(language=langs.code(lang))))
+        await params.result_callback(
+            {"status": "asked", "instructions": "Menu driver ko suna diya gaya hai. Ab kuch mat bolo; driver ki "
+             "pasand suno aur switch_language call karo (hi, te, kn, mr ya en)."},
+            properties=FunctionCallResultProperties(run_llm=False),
+        )
+        await params.llm.push_frame(TTSSpeakFrame(langs.spoken(lang, "menu")))
+
+    async def switch_language(params: FunctionCallParams, lang: str):
+        """Switch the whole call to the language the driver chose.
+
+        Args:
+            lang: One of hi (Hindi), te (Telugu), kn (Kannada), mr (Marathi), en (English).
+        """
+        if lang not in langs.SUPPORTED:
+            await params.result_callback({"error": f"unknown language {lang!r}", "supported": list(langs.SUPPORTED)})
+            return
+        state.lang = lang
+        code = langs.code(lang)
+        logger.info(f"Language switched to {lang} ({code})")
+        await params.llm.push_frame(TTSUpdateSettingsFrame(delta=TTSSettings(language=code)))
+        await params.llm.push_frame(STTUpdateSettingsFrame(delta=STTSettings(language=code)), FrameDirection.UPSTREAM)
+        note = langs.STRINGS[lang]["note"] if lang in langs.STRINGS else "Ab se Hindi mein hi baat karo, Devanagari mein."
+        params.llm.append_system_instruction(note)
+        await params.result_callback({
+            "language": lang,
+            "instructions": note + " Ab usi bhasha mein pehle poochho kaise ho, phir neend wala sawaal: '"
+            + langs.spoken(lang, "check_in") + "'",
+        })
+
+    tools = [record_sleepiness, more_questions, end_call]
+    if state.lang == "auto":
+        tools += [offer_languages, switch_language]
+    return tools
+
+
+def _bank(state: CallState) -> str:
+    return state.lang if state.lang in langs.STRINGS else "hi"

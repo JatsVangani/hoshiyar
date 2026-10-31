@@ -25,6 +25,7 @@ from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.google.llm import GoogleLLMService
 
 from hoshiyar.brain import OPENER, persona_for, CallState, make_tools, FIRST_NUDGE_AFTER, nudge_for, recheck_after
+from hoshiyar import langs
 
 from pipecat.turns.user_mute.mute_until_first_bot_complete_user_mute_strategy import (
     MuteUntilFirstBotCompleteUserMuteStrategy,
@@ -58,7 +59,7 @@ def opener_frame(text: str = OPENER) -> TTSSpeakFrame:
     frame.interruptible = False
     return frame
 
-def make_llm(kind: str = "checkin"):
+def make_llm(kind: str = "checkin", lang: str = "hi"):
     provider = os.environ.get("LLM_PROVIDER", "sarvam").lower()
     if provider not in LLM_PROVIDERS:
         raise ValueError(f"LLM_PROVIDER must be one of {sorted(LLM_PROVIDERS)}, not {provider!r}")
@@ -67,16 +68,17 @@ def make_llm(kind: str = "checkin"):
     logger.info(f"LLM: {provider} / {model}")
     return service(
         api_key=os.environ[key_var],
-        settings=service.Settings(model=model, system_instruction=persona_for(kind), **extra),
+        settings=service.Settings(model=model, system_instruction=persona_for(kind, lang), **extra),
     )
 
-def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "checkin") -> tuple[Pipeline, CallState]:
+def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "checkin", lang: str = "hi") -> tuple[Pipeline, CallState]:
     # Speech to text. Sarvam accepts 8000 or 16000 Hz, so we tell it which one.
+    # Hindi and auto both start on hi-IN, exactly as before: the auto call switches only when the driver asks.
     stt = SarvamRealtimeSTTService(
         api_key=os.environ["SARVAM_API_KEY"],
         sample_rate=sample_rate,
         settings=SarvamRealtimeSTTService.Settings(
-            language="hi-IN",
+            language=langs.code(lang),
             mode="transcribe",
             stream_type="fast",
         ),
@@ -84,7 +86,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "chec
     )
 
     # The brain. system_instructions lives inside Settings in Pipecat 1.14
-    llm = make_llm(kind)
+    llm = make_llm(kind, lang)
 
     # Text to speech, generated at the transport's rate so nothing is resampled.
     tts = SarvamTTSService(
@@ -93,7 +95,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "chec
         settings=SarvamTTSService.Settings(
             model="bulbul:v3",
             voice="rahul",
-            language="hi-IN",
+            language=langs.code(lang),
             min_buffer_size=30,
         ),
     )
@@ -102,7 +104,7 @@ def build_pipeline(transport: BaseTransport, sample_rate: int, kind: str = "chec
     # context = LLMContext(
     #     [{"role": "user", "content": "Ek line mein namaste bolo aur poochho main kaisa hoon."}]
     # )
-    state = CallState()
+    state = CallState(lang=lang)
     context = LLMContext(tools=make_tools(state))
     
     user_agg, assistant_agg = LLMContextAggregatorPair(
