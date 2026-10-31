@@ -16,7 +16,7 @@ from loguru import logger
 load_dotenv()
 
 from hoshiyar.bot_phone import run_phone_bot
-from hoshiyar import vobiz, alerts, scheduler, fleet, trials
+from hoshiyar import vobiz, alerts, scheduler, fleet, trials, home
 from urllib.parse import urlencode
 from hoshiyar.trials import TrialError, Pending
 
@@ -53,6 +53,12 @@ async def answer():
         "</Response>"
     )
     return Response(content=xml, media_type="application/xml")
+
+@app.get("/", response_class=HTMLResponse)
+async def homepage():
+    """The landing page: the pitch, and the way in to /fleet."""
+    return home.render()
+
 
 @app.get("/fleet", response_class=HTMLResponse)
 async def fleet_page(request: Request):
