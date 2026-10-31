@@ -36,6 +36,31 @@ def save(state: CallState, kind: str) -> dict:
     return record
 
 
+def save_missed(driver: str, kind: str, status: str, attempts: int, started_at: float) -> dict:
+    """A call that never connected: busy, no-answer or a failed dial, after every redial. Same shape as a
+    finished call so the page and the drift signal can read it, plus 'status' and 'attempts'."""
+    record = {
+        "driver": driver,
+        "kind": kind,
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at)),
+        "duration": 0.0,
+        "scores": [],
+        "mode": "MILD",
+        "reply_delays": [],
+        "alerts": [],
+        "unresponsive": False,
+        "drift": "steady",
+        "break_taken": False,
+        "call_id": None,
+        "status": status,  # a finished call has no 'status' key: read it as 'completed'
+        "attempts": attempts,
+    }
+    CALLS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with CALLS_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return record
+
+
 def load(driver: str | None = None) -> list[dict]:
     """All calls, oldest first; optionally one driver's."""
     if not CALLS_FILE.exists():

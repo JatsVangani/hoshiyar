@@ -40,6 +40,10 @@ async def notify_fleet(text: str) -> bool:
 
 def alert_xml(alert_id: str) -> str:
     """What Vobiz plays when the manager answers: the alert twice, then the call ends by itself."""
-    text = PENDING.get(alert_id, "Hoshiyar alert. Please check the fleet page.")
+    return speak_xml(PENDING.get(alert_id, "Hoshiyar alert. Please check the fleet page."))
+
+
+def speak_xml(text: str) -> str:
+    """Say one thing twice in Vobiz's English voice and hang up. Used for alerts and trial codes."""
     return f'<Response><Speak voice="MAN" language="en-GB" loop="2">{escape(text)}</Speak></Response>'
 

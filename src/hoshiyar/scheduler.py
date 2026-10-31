@@ -11,7 +11,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from hoshiyar import vobiz
+from hoshiyar import vobiz, trials, records
 
 ROSTER_FILE = Path(os.environ.get("ROSTER_FILE", "data/drivers.json"))
 SCHEDULE_FILE = Path(os.environ.get("SCHEDULE_FILE", "data/schedule.json"))
@@ -56,6 +56,7 @@ def spawn(coro) -> None:
 async def place_call(driver: dict, kind: str) -> str:
     """Dial, wait for the hangup, redial if the driver did not pick up. Returns the final CallStatus."""
     status = "failed"
+    started = time.time()
     for attempt in range(1, MAX_ATTEMPTS + 1):
         logger.info(f"Rota: calling {driver['name']} ({kind}) attempt {attempt}")
         try:
@@ -72,6 +73,7 @@ async def place_call(driver: dict, kind: str) -> str:
             return status
         if attempt < MAX_ATTEMPTS:
             await asyncio.sleep(REDIAL_AFTER)
+    records.save_missed(driver["name"], kind, status, MAX_ATTEMPTS, started)  # the fleet page must show this
     return status
 
 
@@ -100,20 +102,34 @@ async def run_rota() -> None:
         spawn(_wakeup(w["driver"], w["due"]))
     logger.info(f"Rota: {len(load_roster())} drivers on the roster, {len(data['wakeups'])} wake-ups re-armed")
     while True:
-        now = datetime.now()
-        for driver in load_roster():  # re-read every tick: edit the file, no restart needed
-            for hhmm in driver.get("checkins", []):
-                slot = slot_due(hhmm, now)
-                if slot is None:
-                    continue
-                key = f"{driver['phone']}@{slot:%Y-%m-%d %H:%M}"
-                data = _schedule()
-                if key in data["placed"]:
-                    continue
-                data["placed"][key] = "calling"
-                _save_schedule(data)
-                spawn(_rota_call(driver, key))
+        tick(datetime.now())
         await asyncio.sleep(TICK)
+
+
+def tick(now: datetime) -> list[str]:
+    """One pass over the roster and tonight's verified trials: start every slot that is due and not yet placed."""
+    started = []
+    for driver in load_roster():  # re-read every tick: edit the file, no restart needed
+        for hhmm in driver.get("checkins", []):
+            slot = slot_due(hhmm, now)
+            if slot is not None:
+                started += _start(driver, slot)
+    for driver in trials.drivers():  # a trial is due once, at an absolute time, with the same grace
+        due = datetime.fromtimestamp(driver["due"])
+        if 0 <= (now - due).total_seconds() <= GRACE:
+            started += _start(driver, due)
+    return started
+
+
+def _start(driver: dict, slot: datetime) -> list[str]:
+    key = f"{driver['phone']}@{slot:%Y-%m-%d %H:%M}"
+    data = _schedule()
+    if key in data["placed"]:
+        return []
+    data["placed"][key] = "calling"
+    _save_schedule(data)
+    spawn(_rota_call(driver, key))
+    return [key]
 
 
 def slot_due(hhmm: str, now: datetime) -> datetime | None:
