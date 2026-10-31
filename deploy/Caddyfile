@@ -1,4 +1,9 @@
-# Caddy fronts the app with HTTPS. Install: cp deploy/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy
-hoshiyar.bharatghumio.com {
+# Caddy fronts the app on plain HTTP. The VPS provider (AIC Cloud) owns the public address: it forwards its
+# HTTPS URL and a direct port to this container's port 80 and terminates TLS itself, so no certificate here.
+# Install: cp deploy/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy
+{
+    auto_https off
+}
+:80 {
     reverse_proxy 127.0.0.1:7860
 }
