@@ -1,0 +1,18 @@
+# systemd unit for the Hoshiyar server. Install: cp deploy/hoshiyar.service /etc/systemd/system/ && systemctl enable --now hoshiyar
+[Unit]
+Description=Hoshiyar voice co-driver server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/hoshiyar
+Environment=TZ=Asia/Kolkata
+Environment=HOST=127.0.0.1
+Environment=PATH=/opt/hoshiyar/.venv/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/hoshiyar/.venv/bin/python -m hoshiyar.server
+Restart=always
+RestartSec=3
+# one process only: the scheduler's calls and the alert queue live in memory
+
+[Install]
+WantedBy=multi-user.target

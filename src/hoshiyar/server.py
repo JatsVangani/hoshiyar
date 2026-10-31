@@ -161,4 +161,4 @@ async def ws(websocket: WebSocket):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    uvicorn.run(app, host=os.environ.get("HOST", "0.0.0.0"), port=7860)  # the VPS unit sets HOST=127.0.0.1: only Caddy reaches it

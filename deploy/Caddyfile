@@ -1,0 +1,4 @@
+# Caddy fronts the app with HTTPS. Install: cp deploy/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy
+hoshiyar.bharatghumio.com {
+    reverse_proxy 127.0.0.1:7860
+}

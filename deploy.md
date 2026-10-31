@@ -1,69 +1,61 @@
-# Deploying Hoshiyar on Fly.io
+# Deploying Hoshiyar on the VPS
 
-One machine in Mumbai, always on, the data files on a 1 GB volume. Run everything from the repo root.
-`flyctl` is installed and logged in (`fly auth whoami` to check).
+Ubuntu 24.04, 1 CPU, 1 GB RAM, root over SSH on port 20065. The app runs as one systemd service behind Caddy,
+which handles HTTPS for hoshiyar.bharatghumio.com. The repo is copied with scp, not git.
 
 ## First deploy
 
 ```sh
-# 1. Create the app. If fly says the name is taken, create it with another name (say hoshiyar-fleet)
-#    and change the app = "..." line in fly.toml to match; the URL below changes with it.
-fly apps create hoshiyar
+# 0. DNS (Cloudflare, zone bharatghumio.com): A record, name hoshiyar, IPv4 148.113.17.68, proxy OFF.
+#    Proxy off matters: Caddy needs the direct hostname for its certificate, and Vobiz's webhooks and the
+#    audio websocket should not pass through Cloudflare's proxy.
 
-# 2. The volume for data/ (roster, records, schedule, trials). Same region as the machine.
-fly volumes create hoshiyar_data --region bom --size 1 --yes
+# 1. Copy the repo (without the venv, data and scratch), then the two files git never carries, and point
+#    the box's copy of .env at its own hostname. The laptop's .env keeps its ngrok URL.
+rsync -avz -e "ssh -p 20065" --exclude .venv --exclude .git --exclude scratch --exclude data --exclude .env --exclude __pycache__ \
+      ./ root@148.113.17.68:/opt/hoshiyar/
+scp -P 20065 .env root@148.113.17.68:/opt/hoshiyar/.env
+ssh -p 20065 root@148.113.17.68 "sed -i 's#^LOCAL_SERVER_URL=.*#LOCAL_SERVER_URL=https://hoshiyar.bharatghumio.com#' /opt/hoshiyar/.env && mkdir -p /opt/hoshiyar/data"
+scp -P 20065 data/drivers.json root@148.113.17.68:/opt/hoshiyar/data/drivers.json
 
-# 3. Secrets, straight from .env (comments and blank lines dropped). .env never leaves this laptop otherwise.
-grep -Ev '^\s*(#|$)' .env | fly secrets import
-
-# 4. The public URL Vobiz must call back on. Use the app name fly chose in step 1.
-fly secrets set LOCAL_SERVER_URL=https://hoshiyar.fly.dev
-
-# 5. Build and deploy. The first build takes several minutes (Pipecat is large); later ones are quicker.
-fly deploy
-
-# 6. Put the roster on the volume. The machine starts with an empty /data.
-fly ssh sftp shell
-#   inside the sftp shell:   put data/drivers.json /data/drivers.json      then  exit
+# 2. On the box: swap, timezone, packages, uv, venv, service, Caddy. About five minutes.
+ssh -p 20065 root@148.113.17.68 "bash /opt/hoshiyar/deploy/vps-setup.sh"
 ```
 
-Then open `https://hoshiyar.fly.dev/fleet`, book a trial, and check the logs while the phone rings:
+Then open https://hoshiyar.bharatghumio.com/fleet (Caddy fetches the certificate on the first request; give it a
+minute), book a trial, and watch the logs while the phone rings:
 
 ```sh
-fly logs
+ssh -p 20065 root@148.113.17.68 "journalctl -u hoshiyar -f"
 ```
+
+## Updating after a change
+
+```sh
+rsync -avz -e "ssh -p 20065" --exclude .venv --exclude .git --exclude scratch --exclude data --exclude .env --exclude __pycache__ \
+      ./ root@148.113.17.68:/opt/hoshiyar/
+ssh -p 20065 root@148.113.17.68 "systemctl restart hoshiyar"
+```
+
+If `pyproject.toml` or `uv.lock` changed, run `cd /opt/hoshiyar && uv sync --frozen --no-dev` on the box before the restart.
 
 ## Day to day
 
 ```sh
-fly deploy                 # after a git commit you want live
-fly logs                   # the same output the laptop terminal showed
-fly status                 # machine state, region, health check
-fly ssh console            # a shell on the machine, if ever needed
-fly machine stop <id>      # pause between the judging week and the finale; billing stops too
-fly machine start <id>
+ssh -p 20065 root@148.113.17.68
+systemctl status hoshiyar        # running? restarts?
+journalctl -u hoshiyar -f        # live log, the same lines the laptop terminal showed
+journalctl -u hoshiyar --since "1 hour ago"
+systemctl restart hoshiyar
+vi /opt/hoshiyar/data/drivers.json   # the rota re-reads it every 20 s, no restart needed
+free -m                          # memory; swap in use is fine, swap exhausted is not
 ```
-
-Edit the roster on the volume with `fly ssh sftp shell` (`get` / `put`), or `fly ssh console` and `vi /data/drivers.json`.
-The rota re-reads it every 20 s; no restart needed.
-
-## Custom domain (optional, any time)
-
-In Cloudflare, zone bharatghumio.com: add a CNAME `hoshiyar` -> `hoshiyar.fly.dev`, proxy **off**. Then:
-
-```sh
-fly certs add hoshiyar.bharatghumio.com
-fly secrets set LOCAL_SERVER_URL=https://hoshiyar.bharatghumio.com
-```
-
-`fly certs check hoshiyar.bharatghumio.com` shows when the certificate is issued (a minute or two).
-The fly.dev name keeps working alongside.
 
 ## What to know
 
-- One process only. The scheduler's calls and the alert queue are in memory; never scale to two machines.
-- `TZ=Asia/Kolkata` is set in the image and in fly.toml. The roster's check-in times are local time.
-- Memory: 512 MB plus 512 MB swap. The app idles near 250 MB; a call adds about 100 MB. If `fly status`
-  ever shows OOM restarts, `fly scale memory 1024` is the fix (about double the price).
-- Secrets changed with `fly secrets set` restart the machine automatically.
-- Cost: about $3.50 a month for the machine while it runs, billed hourly, plus a few cents for the volume.
+- One process only. The scheduler's calls and the alert queue are in memory.
+- `TZ=Asia/Kolkata` is set in the unit. The roster's check-in times are local time.
+- `data/` on the box holds the roster, records, schedule and trials. It is never overwritten by the rsync above.
+- `.env` lives only on the laptop and the box. Never commit it, never paste it anywhere.
+- Ports: 20065 for SSH, 80 and 443 for Caddy. The app itself listens on 127.0.0.1:7860 (the unit sets HOST), so
+  only Caddy can reach it; on the laptop HOST is unset and it still binds 0.0.0.0 for ngrok.
