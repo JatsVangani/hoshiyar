@@ -1,0 +1,10 @@
+.venv
+.git
+.env
+.env.*
+data
+scratch
+__pycache__
+**/__pycache__
+*.png
+.DS_Store
