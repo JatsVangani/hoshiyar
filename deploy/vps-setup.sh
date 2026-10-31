@@ -4,10 +4,14 @@
 set -euo pipefail
 cd /opt/hoshiyar
 
-echo "== swap (1 GB) =="
+echo "== swap (1 GB, skipped where the host forbids it, e.g. LXC containers) =="
 if ! swapon --show | grep -q /swapfile; then
-  fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  if fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap -q /swapfile && swapon /swapfile 2>/dev/null; then
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  else
+    echo "   swap not permitted on this VPS; continuing without it"
+    rm -f /swapfile; sed -i '/swapfile/d' /etc/fstab
+  fi
 fi
 
 echo "== timezone =="

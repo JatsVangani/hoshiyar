@@ -54,6 +54,8 @@ free -m                          # memory; swap in use is fine, swap exhausted i
 ## What to know
 
 - One process only. The scheduler's calls and the alert queue are in memory.
+- This VPS is an LXC container (kernel `pve`): swap cannot be enabled, so the 1 GB is all there is. The app idles
+  near 250 MB and a call adds about 100; the unit restarts it within 3 s if it is ever killed. Watch `free -m`.
 - `TZ=Asia/Kolkata` is set in the unit. The roster's check-in times are local time.
 - `data/` on the box holds the roster, records, schedule and trials. It is never overwritten by the rsync above.
 - `.env` lives only on the laptop and the box. Never commit it, never paste it anywhere.
