@@ -9,6 +9,8 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import Response, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from loguru import logger
 
 load_dotenv()
@@ -27,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")  # the fleet page's illustration
 
 # VOBIZ_API = "https://api.vobiz.ai/api/v1"
 
